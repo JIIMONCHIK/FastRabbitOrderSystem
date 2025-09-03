@@ -6,6 +6,8 @@ services:
     ports:
       - "5672:5672"   # AMQP protocol for clients
       - "15672:15672" # Management UI (login: guest / guest)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - app-network
 
@@ -32,6 +34,8 @@ services:
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
     ports:
       - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
     depends_on:
       - postgres
     networks:
@@ -54,11 +58,11 @@ services:
   order_service:
     build: ./order_service
     container_name: order_service
-    expose:
-      - "8001" # Expose port only within Docker network, not to host
+    ports:
+      - "8001:8001"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://admin:password@postgres:5432/order_db
-      - RABBITMQ_URL=amqp://rabbitmq:5672/
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/order_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     depends_on:
       - rabbitmq
       - postgres
@@ -89,7 +93,7 @@ services:
     build: ./shipping_service
     container_name: shipping_service
     environment:
-      - DATABASE_URL=postgresql+asyncpg://admin:password@postgres:5432/shipping_db
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/shipping_db
       - RABBITMQ_URL=amqp://rabbitmq:5672/
     depends_on:
       - rabbitmq
@@ -99,6 +103,8 @@ services:
 
 volumes:
   postgres_data:
+  rabbitmq_data:
+  pgadmin_data:
 
 networks:
   app-network:
