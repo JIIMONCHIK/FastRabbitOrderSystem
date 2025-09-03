@@ -7,6 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ./app ./app
 
-# Эти сервисы являются потребителями RabbitMQ.
-# Они запускаются как воркеры.
-CMD ["python", "main.py"]
+CMD ["python", "app/main.py"]

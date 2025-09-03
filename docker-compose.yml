@@ -73,7 +73,7 @@ services:
     build: ./payment_service
     container_name: payment_service
     environment:
-      - RABBITMQ_URL=amqp://rabbitmq:5672/
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     depends_on:
       - rabbitmq
     networks:
