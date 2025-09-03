@@ -1,0 +1,2 @@
+# FastRabbitOrderSystem
+FastApi + RabbitMQ
