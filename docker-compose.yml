@@ -1,0 +1,105 @@
+services:
+  # --- Инфраструктурные сервисы ---
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"   # AMQP protocol for clients
+      - "15672:15672" # Management UI (login: guest / guest)
+    networks:
+      - app-network
+
+  postgres:
+    image: postgres:17
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB} # Будет создана по умолчанию, но мы используем свои
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./databases/init.sql:/docker-entrypoint-initdb.d/init.sql # Скрипт для создания БД
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+
+  # --- Бизнес-сервисы ---
+  api_gateway:
+    build: ./api_gateway
+    container_name: api_gateway
+    ports:
+      - "8000:8000" # Expose API Gateway to the host
+    environment:
+      - ORDER_SERVICE_URL=http://order_service:8001
+    depends_on:
+      - rabbitmq
+      - order_service
+    networks:
+      - app-network
+
+  order_service:
+    build: ./order_service
+    container_name: order_service
+    expose:
+      - "8001" # Expose port only within Docker network, not to host
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://admin:password@postgres:5432/order_db
+      - RABBITMQ_URL=amqp://rabbitmq:5672/
+    depends_on:
+      - rabbitmq
+      - postgres
+    networks:
+      - app-network
+
+  payment_service:
+    build: ./payment_service
+    container_name: payment_service
+    environment:
+      - RABBITMQ_URL=amqp://rabbitmq:5672/
+    depends_on:
+      - rabbitmq
+    networks:
+      - app-network
+
+  notification_service:
+    build: ./notification_service
+    container_name: notification_service
+    environment:
+      - RABBITMQ_URL=amqp://rabbitmq:5672/
+    depends_on:
+      - rabbitmq
+    networks:
+      - app-network
+
+  shipping_service:
+    build: ./shipping_service
+    container_name: shipping_service
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://admin:password@postgres:5432/shipping_db
+      - RABBITMQ_URL=amqp://rabbitmq:5672/
+    depends_on:
+      - rabbitmq
+      - postgres
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
