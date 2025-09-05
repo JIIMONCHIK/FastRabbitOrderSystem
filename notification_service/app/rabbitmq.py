@@ -76,7 +76,6 @@ class NotificationService:
 
     async def send_order_created_notification(self, order_data: Dict[str, Any]):
         """Уведомление о создании заказа"""
-        # В реальном приложении здесь была бы отправка email/SMS/push
         logger.info(f"📧 УВЕДОМЛЕНИЕ: Создан новый заказ #{order_data['id']}")
         logger.info(f"   Пользователь: {order_data['user_id']}")
         logger.info(f"   Товар: {order_data['product_id']}")
