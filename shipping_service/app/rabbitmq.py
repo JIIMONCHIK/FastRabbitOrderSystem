@@ -5,6 +5,9 @@ import asyncio
 import logging
 from typing import Optional, Dict, Any
 from api_client import OrderAPIClient
+from database import AsyncSessionLocal
+from models import Shipping, ShippingStatus
+from sqlalchemy import text, select
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -57,6 +60,60 @@ class ShippingService:
                 await asyncio.sleep(delay)
                 delay *= 2
 
+    async def create_shipping_record(self, order_id: int, user_id: int, total_price: float):
+        """Создание записи о доставке в базе данных"""
+        async with AsyncSessionLocal() as session:
+            try:
+                # Проверяем, нет ли уже записи для этого заказа
+                existing_shipping = await session.execute(
+                    text("SELECT * FROM shippings WHERE order_id = :order_id"),
+                    {"order_id": order_id}
+                )
+                if existing_shipping.fetchone():
+                    logger.info(f"Запись о доставке для заказа {order_id} уже существует")
+                    return
+                
+                # Создаем новую запись о доставке
+                shipping_cost = total_price * 0.1  # 10% от стоимости заказа
+                shipping = Shipping(
+                    order_id=order_id,
+                    user_id=user_id,
+                    address="123 Main St, City, Country",  # В реальном приложении это бы приходило из заказа
+                    shipping_cost=shipping_cost,
+                    status=ShippingStatus.PROCESSING
+                )
+                
+                session.add(shipping)
+                await session.commit()
+                logger.info(f"Создана запись о доставке для заказа {order_id}")
+                
+            except Exception as e:
+                logger.error(f"Ошибка при создании записи о доставке: {e}")
+                await session.rollback()
+
+    async def update_shipping_status(self, order_id: int, status: ShippingStatus, tracking_number: str = None):
+        """Обновление статуса доставки в базе данных"""
+        async with AsyncSessionLocal() as session:
+            try:
+                # Находим запись о доставке
+                result = await session.execute(
+                    select(Shipping).where(Shipping.order_id == order_id)
+                )
+                shipping = result.scalar_one_or_none()
+                
+                if shipping:
+                    # Обновляем статус
+                    shipping.status = status
+                    shipping.tracking_number = tracking_number
+                    await session.commit()
+                    logger.info(f"Статус доставки для заказа {order_id} обновлен на '{status.value}'")
+                else:
+                    logger.warning(f"Запись о доставке для заказа {order_id} не найдена")
+                    
+            except Exception as e:
+                logger.error(f"Ошибка при обновлении статуса доставки: {e}")
+                await session.rollback()
+
     async def process_payment(self, message: aio_pika.IncomingMessage):
         """Обработка сообщения об успешной оплате"""
         async with message.process():
@@ -64,8 +121,14 @@ class ShippingService:
                 payment_data = json.loads(message.body.decode())
                 logger.info(f"Получено уведомление об оплате заказа: {payment_data}")
                 
-                # Имитация процесса доставки
+                # Создаем запись о доставке в базе данных
                 order_id = payment_data["order_id"]
+                user_id = payment_data.get("user_id", 1)
+                total_price = payment_data.get("amount", 0)
+                
+                await self.create_shipping_record(order_id, user_id, total_price)
+                
+                # Имитация процесса доставки
                 shipping_time = 3 + (order_id % 4)  # Разное время для наглядности
                 logger.info(f"Начинаю обработку доставки заказа {order_id}, время: {shipping_time}с")
                 
@@ -75,10 +138,15 @@ class ShippingService:
                 result = await self.api_client.update_order_status(order_id, "shipped")
                 
                 if result:
+                    # Обновляем статус доставки в нашей БД
+                    tracking_number = f"TRACK_{order_id}_{os.urandom(4).hex().upper()}"
+                    await self.update_shipping_status(order_id, ShippingStatus.SHIPPED, tracking_number)
+                    
                     # Публикуем событие о доставке заказа
                     shipping_data = {
                         "order_id": order_id,
                         "status": "shipped",
+                        "tracking_number": tracking_number,
                         "shipping_id": f"ship_{order_id}_{os.urandom(4).hex()}",
                         "estimated_delivery": "2023-12-25",  # Примерная дата доставки
                         "timestamp": asyncio.get_event_loop().time()
