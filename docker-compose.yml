@@ -94,7 +94,7 @@ services:
     container_name: shipping_service
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/shipping_db
-      - RABBITMQ_URL=amqp://rabbitmq:5672/
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     depends_on:
       - rabbitmq
       - postgres
