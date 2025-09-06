@@ -46,6 +46,13 @@ class ShippingService:
                 
                 # Начинаем потребление сообщений
                 await queue.consume(self.process_payment)
+
+                # Создаем очередь для обработки удаленных заказов
+                delete_queue = await self.channel.declare_queue("shipping_deletes", durable=True)
+
+                await delete_queue.bind(self.exchange, routing_key="order.deleted")
+                
+                await delete_queue.consume(self.process_order_delete)
                 
                 # Подключаем API клиент
                 await self.api_client.connect()
@@ -170,6 +177,43 @@ class ShippingService:
         
         await self.exchange.publish(message, routing_key=routing_key)
         logger.info(f"Событие '{routing_key}' опубликовано для заказа {shipping_data['order_id']}")
+    
+    async def process_order_delete(self, message: aio_pika.IncomingMessage):
+        """Обработка сообщения об удалении заказа"""
+        async with message.process():
+            try:
+                order_data = json.loads(message.body.decode())
+                order_id = order_data["id"]
+                
+                # Удаляем запись о доставке из БД
+                await self.delete_shipping_record(order_id)
+                
+                logger.info(f"Запись о доставке для заказа {order_id} удалена")
+                
+            except Exception as e:
+                logger.error(f"Ошибка при удалении записи о доставке: {e}")
+
+    async def delete_shipping_record(self, order_id: int):
+        """Удаление записи о доставке из базы данных"""
+        async with AsyncSessionLocal() as session:
+            try:
+                # Находим запись о доставке
+                result = await session.execute(
+                    select(Shipping).where(Shipping.order_id == order_id)
+                )
+                shipping = result.scalar_one_or_none()
+                
+                if shipping:
+                    # Удаляем запись
+                    await session.delete(shipping)
+                    await session.commit()
+                    logger.info(f"Запись о доставке для заказа {order_id} удалена из БД")
+                else:
+                    logger.warning(f"Запись о доставке для заказа {order_id} не найдена")
+                    
+            except Exception as e:
+                logger.error(f"Ошибка при удалении записи о доставке: {e}")
+                await session.rollback()
 
     async def close(self):
         """Закрытие соединений"""

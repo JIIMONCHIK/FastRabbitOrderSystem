@@ -42,19 +42,6 @@ services:
       - app-network
 
   # --- Бизнес-сервисы ---
-  api_gateway:
-    build: ./api_gateway
-    container_name: api_gateway
-    ports:
-      - "8000:8000" # Expose API Gateway to the host
-    environment:
-      - ORDER_SERVICE_URL=http://order_service:8001
-    depends_on:
-      - rabbitmq
-      - order_service
-    networks:
-      - app-network
-
   order_service:
     build: ./order_service
     container_name: order_service
