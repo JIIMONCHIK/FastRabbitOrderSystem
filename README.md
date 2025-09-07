@@ -1,6 +1,6 @@
 # Микросервисная система обработки заказов
 
-проект, демонстрирующий реализацию микросервисной архитектуры для электронной коммерции на FastAPI.
+Проект, демонстрирующий реализацию микросервисной архитектуры для электронной коммерции на FastAPI.
 
 ---
 
@@ -13,16 +13,17 @@
 Система построена по принципам микросервисной архитектуры с использованием брокера сообщений для межсервисного взаимодействия:
 
 ```mermaid
-API --> Order[Order Service]
-Order --> RMQ[RabbitMQ]
-RMQ --> Payment[Payment Service]
-RMQ --> Shipping[Shipping Service]
-RMQ --> Notification[Notification Service]
-
-Order --> Order DB
-Payment --> Logs
-Shipping --> Shipping DB
-Notification --> Logs   
+flowchart LR
+  API["API"] --> Order["Order Service"]
+  Order --> RMQ[RabbitMQ]
+  RMQ --> Payment["Payment Service"]
+  RMQ --> Shipping["Shipping Service"]
+  RMQ --> Notification["Notification Service"]
+  
+  Order --> OrderDB["Order DB"]
+  Payment --> Logs["Logs"]
+  Shipping --> ShippingDB["Shipping DB"]
+  Notification --> Logs
 ```
 
 ## Технологический стек
